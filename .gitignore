@@ -1,0 +1,13 @@
+.serena/
+.cocoindex_code/
+.github/
+node_modules/
+dist/
+coverage/
+out/
+.DS_Store
+.vscode-test
+docs/issues
+docs/I
+docs/specification-changes.md
+docs/spec-changes.md
