@@ -1,26 +1,119 @@
-// The module 'vscode' contains the VS Code extensibility API
-// Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
+import { AwakeController, ErrorNotifier, LoggerLike } from './application/awakeController';
+import { SleepInhibitor } from './domain/sleepInhibitor';
+import { createSleepInhibitor } from './infrastructure/inhibitors/createSleepInhibitor';
+import { nodeChildProcessFacade, ChildProcessFacade } from './infrastructure/process/childProcessFacade';
+import { StatusBarController, StatusBarItemLike } from './ui/statusBarController';
 
-// This method is called when your extension is activated
-// Your extension is activated the very first time the command is executed
-export function activate(context: vscode.ExtensionContext) {
-
-	// Use the console to output diagnostic information (console.log) and errors (console.error)
-	// This line of code will only be executed once when your extension is activated
-	console.log('Congratulations, your extension "awake-screen" is now active!');
-
-	// The command has been defined in the package.json file
-	// Now provide the implementation of the command with registerCommand
-	// The commandId parameter must match the command field in package.json
-	const disposable = vscode.commands.registerCommand('awake-screen.helloWorld', () => {
-		// The code you place here will be executed every time your command is executed
-		// Display a message box to the user
-		vscode.window.showInformationMessage('Hello World from AwakeScreen!');
-	});
-
-	context.subscriptions.push(disposable);
+export interface AwakeExtensionDependencies {
+	platform?: NodeJS.Platform;
+	processFacade?: ChildProcessFacade;
+	createStatusBarItem?: () => StatusBarItemLike;
+	errorNotifier?: ErrorNotifier;
+	logger?: LoggerLike;
+	sleepInhibitor?: SleepInhibitor;
 }
 
-// This method is called when your extension is deactivated
-export function deactivate() {}
+interface ResolvedAwakeExtensionDependencies {
+	platform: NodeJS.Platform;
+	processFacade: ChildProcessFacade;
+	createStatusBarItem: () => StatusBarItemLike;
+	errorNotifier: ErrorNotifier;
+	logger: LoggerLike;
+	sleepInhibitor?: SleepInhibitor;
+}
+
+export interface AwakeExtensionApi {
+	readonly controller: AwakeController;
+	deactivate(): Promise<void>;
+	getStatusBarSnapshot(): { text: string; tooltip: string; command?: string };
+}
+
+class WindowErrorNotifier implements ErrorNotifier {
+	public showError(message: string): Thenable<string | undefined> {
+		return vscode.window.showErrorMessage(message);
+	}
+}
+
+class ConsoleLogger implements LoggerLike {
+	public error(message: string, error?: unknown): void {
+		console.error(message, error);
+	}
+}
+
+class AwakeExtension implements AwakeExtensionApi {
+	public readonly controller: AwakeController;
+	private readonly statusBarController: StatusBarController;
+	private readonly commandDisposables: vscode.Disposable[] = [];
+
+	public constructor(dependencies: ResolvedAwakeExtensionDependencies) {
+		this.statusBarController = new StatusBarController(dependencies.createStatusBarItem());
+		this.statusBarController.initialize();
+		const inhibitor = dependencies.sleepInhibitor ?? createSleepInhibitor(dependencies.platform, dependencies.processFacade);
+		this.controller = new AwakeController(
+			this.statusBarController,
+			inhibitor,
+			dependencies.errorNotifier,
+			dependencies.logger,
+		);
+	}
+
+	public setCommandDisposables(disposables: vscode.Disposable[]): void {
+		this.commandDisposables.push(...disposables);
+	}
+
+	public async deactivate(): Promise<void> {
+		await this.controller.deactivate();
+		this.statusBarController.dispose();
+		this.commandDisposables.forEach((disposable) => disposable.dispose());
+	}
+
+	public getStatusBarSnapshot(): { text: string; tooltip: string; command?: string } {
+		return this.statusBarController.getSnapshot();
+	}
+}
+
+let activeExtension: AwakeExtensionApi | undefined;
+
+function resolveDependencies(overrides: AwakeExtensionDependencies = {}): ResolvedAwakeExtensionDependencies {
+	return {
+		platform: overrides.platform ?? process.platform,
+		processFacade: overrides.processFacade ?? nodeChildProcessFacade,
+		createStatusBarItem: overrides.createStatusBarItem ?? (() => vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100)),
+		errorNotifier: overrides.errorNotifier ?? new WindowErrorNotifier(),
+		logger: overrides.logger ?? new ConsoleLogger(),
+		sleepInhibitor: overrides.sleepInhibitor,
+	};
+}
+
+export function createAwakeExtension(
+	context: vscode.ExtensionContext,
+	overrides: AwakeExtensionDependencies = {},
+): AwakeExtensionApi {
+	const dependencies = resolveDependencies(overrides);
+	const extension = new AwakeExtension(dependencies);
+	const commandDisposables = [
+		vscode.commands.registerCommand('awake-screen.toggle', async () => extension.controller.toggle()),
+		vscode.commands.registerCommand('awake-screen.enable', async () => extension.controller.enable()),
+		vscode.commands.registerCommand('awake-screen.disable', async () => extension.controller.disable()),
+	];
+	commandDisposables.forEach((disposable) => context.subscriptions.push(disposable));
+	extension.setCommandDisposables(commandDisposables);
+	context.subscriptions.push({ dispose: () => extension.deactivate() });
+	return extension;
+}
+
+export function activate(context: vscode.ExtensionContext): AwakeExtensionApi {
+	activeExtension = createAwakeExtension(context);
+	return activeExtension;
+}
+
+export async function deactivate(): Promise<void> {
+	if (activeExtension === undefined) {
+		return;
+	}
+
+	const extension = activeExtension;
+	activeExtension = undefined;
+	await extension.deactivate();
+}

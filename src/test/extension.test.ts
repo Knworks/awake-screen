@@ -1,15 +1,40 @@
 import * as assert from 'assert';
-
-// You can import and use all API from the 'vscode' module
-// as well as import your extension to test it
 import * as vscode from 'vscode';
-// import * as myExtension from '../../extension';
+import { AwakeExtensionApi } from '../extension';
 
-suite('Extension Test Suite', () => {
-	vscode.window.showInformationMessage('Start all tests.');
+suite('Extension integration', () => {
+	async function getExtension(): Promise<vscode.Extension<AwakeExtensionApi>> {
+		const extension = vscode.extensions.getExtension<AwakeExtensionApi>('Knworks.awake-screen');
+		assert.ok(extension);
+		return extension;
+	}
 
-	test('Sample test', () => {
-		assert.strictEqual(-1, [1, 2, 3].indexOf(5));
-		assert.strictEqual(-1, [1, 2, 3].indexOf(0));
+	async function getApi(): Promise<AwakeExtensionApi> {
+		const extension = await getExtension();
+		return extension.activate();
+	}
+
+	test('registers commands and initializes the off state', async () => {
+		const api = await getApi();
+
+		const commands = await vscode.commands.getCommands(true);
+		const statusBar = api.getStatusBarSnapshot();
+
+		assert.strictEqual(statusBar.text, '$(vm-outline) Awake');
+		assert.strictEqual(statusBar.command, 'awake-screen.toggle');
+		assert.ok(commands.includes('awake-screen.toggle'));
+		assert.ok(commands.includes('awake-screen.enable'));
+		assert.ok(commands.includes('awake-screen.disable'));
+		assert.strictEqual(api.controller.getState(), 'off');
+	});
+
+	test('deactivate stops the active inhibitor', async () => {
+		const extension = await getExtension();
+		const api = await extension.activate();
+
+		await extension.exports.deactivate();
+
+		assert.strictEqual(api.controller.getState(), 'off');
+		assert.strictEqual(api.getStatusBarSnapshot().text, '$(vm-outline) Awake');
 	});
 });

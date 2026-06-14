@@ -8,7 +8,7 @@
   "license": "MIT",
   "icon": "images/awake-screen.png",
   "engines": {
-    "vscode": "^1.124.0"
+    "vscode": "^1.120.0"
   },
   "categories": [
     "Other"
@@ -19,13 +19,29 @@
     "awake",
     "display"
   ],
-  "activationEvents": [],
+  "extensionKind": [
+    "ui"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onCommand:awake-screen.toggle",
+    "onCommand:awake-screen.enable",
+    "onCommand:awake-screen.disable"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "awake-screen.helloWorld",
-        "title": "Hello World"
+        "command": "awake-screen.toggle",
+        "title": "Keep Awake: Toggle"
+      },
+      {
+        "command": "awake-screen.enable",
+        "title": "Keep Awake: Enable"
+      },
+      {
+        "command": "awake-screen.disable",
+        "title": "Keep Awake: Disable"
       }
     ]
   },
@@ -44,7 +60,7 @@
     "test": "vscode-test"
   },
   "devDependencies": {
-    "@types/vscode": "^1.124.0",
+    "@types/vscode": "^1.120.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "20.x",
     "@typescript-eslint/eslint-plugin": "^8.31.1",
