@@ -6,7 +6,7 @@ AwakeScreen is a lightweight VS Code Desktop extension that temporarily prevents
 
 1. Open VS Code Desktop.
 2. Enable Keep Awake from the status bar or run `Keep Awake: Toggle` from the Command Palette.
-3. Wait until the status bar changes to `$(vm-pending) Awake`.
+3. Wait until the status bar indicates that Keep Awake is active.
 4. Disable it from the status bar or run `Keep Awake: Disable` when you no longer need sleep prevention.
 
 ## Features
@@ -24,12 +24,12 @@ AwakeScreen is a lightweight VS Code Desktop extension that temporarily prevents
 
 ## Status bar states
 
-The status bar always shows `Awake` with one of four codicons:
+The status bar always shows the Keep Awake status in one of four ways:
 
-- `$(vm-outline) Awake` when sleep prevention is off
-- `$(loading~spin) Awake` while activation is in progress
-- `$(vm-pending) Awake` while sleep prevention is active
-- `$(warning) Awake` when startup failed and a retry is available
+- Off, when sleep prevention is disabled
+- Starting, while activation is in progress
+- Active, while sleep prevention is running
+- Warning, when startup failed and a retry is available
 
 ## Supported environments
 
