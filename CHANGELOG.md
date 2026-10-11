@@ -4,6 +4,10 @@ All notable changes to the "awake-screen" extension will be documented in this f
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## 0.9.1
+
+- Add the `awake-screen.enableOnStartup` setting to automatically enable Keep Awake when VS Code starts or a window reloads (default: `false`).
+
 ## 0.9.0
 
 - Initial release

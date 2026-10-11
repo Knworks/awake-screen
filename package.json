@@ -2,7 +2,7 @@
   "name": "awake-screen",
   "displayName": "AwakeScreen",
   "description": "A lightweight VS Code extension that temporarily prevents screen off and auto sleep from the status bar.",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "publisher": "Knworks",
   "repository": "https://github.com/Knworks/awake-screen",
   "license": "MIT",
