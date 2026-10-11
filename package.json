@@ -30,6 +30,17 @@
   ],
   "main": "./dist/extension.js",
   "contributes": {
+    "configuration": {
+      "title": "AwakeScreen",
+      "properties": {
+        "awake-screen.enableOnStartup": {
+          "type": "boolean",
+          "default": false,
+          "scope": "application",
+          "description": "Automatically enable Keep Awake when VS Code starts or a window reloads. Changes apply the next time the extension starts."
+        }
+      }
+    },
     "commands": [
       {
         "command": "awake-screen.toggle",

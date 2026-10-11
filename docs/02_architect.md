@@ -3,7 +3,7 @@
 ## 1. 🏷️ システム概要
 
 - **アプリ名**: `AwakeScreen`
-- **目的**: VS Code Desktop 上で、利用者が明示的に有効化している間だけ、画面 OFF と OS のアイドル判定による自動スリープを一時的に抑制する
+- **目的**: VS Code Desktop 上で、利用者が手動操作または起動時の自動有効化設定によって有効化している間だけ、画面 OFF と OS のアイドル判定による自動スリープを一時的に抑制する
 - **対象ユーザー**: VS Code Desktop を利用する開発者
 - **設計対象**: `E:\Projects\awake-screen` の VS Code 拡張機能本体
 - **入力資料**:
@@ -16,6 +16,7 @@
 - **対象範囲**:
   - ステータスバー UI
   - コマンドパレット連携
+  - ユーザー設定による起動時の自動有効化
   - OS 別スリープ抑制処理
   - エラー通知
   - 拡張終了時の解除処理
@@ -94,9 +95,15 @@ awake-screen/
 | 観点 | 内容 |
 | --- | --- |
 | 入力 | VS Code による `activate` 呼び出し |
-| 処理 | コントローラー、ステータスバー、OS 別 `SleepInhibitor` を生成し、コマンドを登録する |
-| 出力 | 初期状態 `OFF` のステータスバー表示 |
-| 制約 | 起動時に重い処理を行わず、抑制処理はまだ開始しない |
+| 処理 | ユーザー設定を読み、コントローラー、ステータスバー、OS 別 `SleepInhibitor` を生成してコマンドを登録する。設定が `true` の場合は既存の `enable()` を待機する |
+| 出力 | 既定は `OFF`。自動有効化時は `STARTING` を経て `ON`、失敗時は `ERROR` と通知 |
+| 制約 | `false` の場合は抑制処理を開始しない。設定変更は次回起動から反映する |
+
+- `package.json` の `contributes.configuration` に `awake-screen.enableOnStartup` をboolean、既定値 `false`、スコープ `application` で定義する。ワークスペース設定による上書きは受け付けない。
+- `resolveDependencies()` が `vscode.workspace.getConfiguration('awake-screen').get<boolean>('enableOnStartup', false)` で設定を読み、テストでは依存の上書きを利用する。
+- `createAwakeExtension()` と `activate()` は非同期で、自動有効化が完了してからAPIを返す。
+- `AwakeExtension` は開始処理のPromiseを保持する。`deactivate()` は開始処理が完了してから既存の解除処理を実行する。
+- VS Code起動とウィンドウ再読み込みごとに設定を読み直し、前回のON/OFF状態は復元しない。自動有効化後は手動で解除できる。
 
 ### 4.2 🎛️ ステータスバー状態管理
 
@@ -133,7 +140,7 @@ awake-screen/
 
 | 観点 | 内容 |
 | --- | --- |
-| 入力 | `toggle` または `enable` |
+| 入力 | `toggle`、`enable`、または起動時の自動有効化 |
 | 処理 | `OFF/ERROR -> STARTING -> ON` の順で遷移し、OS 判定後に対応する `SleepInhibitor.start()` を呼ぶ |
 | 出力 | 成功時は `ON`、失敗時は `ERROR` とエラー通知 |
 | 例外 | 未対応 OS、コマンド不存在、API 呼び出し失敗、組織ポリシーによる拒否 |
@@ -167,7 +174,7 @@ awake-screen/
 
 ## 5. 🖥️ 画面設計
 
-本拡張は要件どおり専用画面を持たず、利用者接点はステータスバーとコマンドパレットに限定する。
+本拡張は要件どおり専用画面を持たず、利用者接点はステータスバー、コマンドパレット、VS Code標準のユーザー設定とする。
 
 ### 5.1 📍 ステータスバー
 
@@ -194,7 +201,9 @@ flowchart TD
   User --> Palette[Command Palette]
   StatusBar --> Commands[VS Code Commands]
   Palette --> Commands
-  Commands --> Controller[AwakeController]
+  Startup[拡張起動] --> Settings[enableOnStartup の読取]
+  Settings -->|true| Controller[AwakeController]
+  Commands --> Controller
   Controller --> UI[StatusBarController]
   Controller --> Factory[SleepInhibitor Factory]
   Factory --> Win[WindowsSleepInhibitor]
@@ -210,6 +219,7 @@ flowchart TD
 
 | 種別 | 名称 | 方向 | 用途 | 備考 |
 | --- | --- | --- | --- | --- |
+| VS Code API | `workspace.getConfiguration` | 呼び出し | 起動設定読取 | `awake-screen.enableOnStartup` |
 | VS Code API | `registerCommand` | 呼び出し | コマンド登録 | `toggle` / `enable` / `disable` |
 | VS Code API | `createStatusBarItem` | 呼び出し | 状態表示 | 常時 1 アイテム |
 | VS Code API | `showErrorMessage` | 呼び出し | エラー通知 | 失敗時のみ |
@@ -224,7 +234,7 @@ flowchart TD
 | 単体 | `awakeController` | 状態遷移、重複実行防止、失敗時 `ERROR` 遷移 |
 | 単体 | `statusBarController` | 状態ごとの Codicon / text / command 更新 |
 | 単体 | OS 別 `SleepInhibitor` | 開始 / 解除要求、未対応環境の失敗 |
-| 統合 | `extension.ts` | コマンド登録、初期状態 `OFF`、`deactivate` 時の解除 |
+| 統合 | `extension.ts` | コマンド登録、未設定 / false で `OFF`、true で自動起動、失敗通知、手動解除、開始中の `deactivate` 時の解除 |
 | 回帰 | VS Code test host | ステータスバーとコマンドが要件どおりに動くこと |
 
 `src/test/` は controller、status bar、各 inhibitor、extension 結線の回帰確認を満たす構成へ更新済み。
@@ -234,9 +244,9 @@ flowchart TD
 | 区分 | 設計への反映 |
 | --- | --- |
 | デザイン | UI はステータスバーのみとし、Codicon とテキストで状態を表す |
-| ユーザビリティ | 1 クリックで切替可能、起動時 `OFF`、通常操作では不要な通知を出さない |
+| ユーザビリティ | 1 クリックで切替可能、既定は起動時 `OFF`、設定により自動有効化、通常操作では不要な通知を出さない |
 | セキュリティ | 管理者権限不要、外部通信なし、任意コマンド入力なし、OS 制限回避なし |
-| パフォーマンス | 起動時は表示初期化のみ、`OFF` では常駐処理なし、`STARTING` で重複起動防止 |
+| パフォーマンス | 起動時は表示初期化と設定読取を行い、設定が true の場合のみ抑制処理を開始する。`OFF` では常駐処理なし、`STARTING` で重複起動防止 |
 | 保守性 | UI、状態遷移、OS 別実装、プロセス制御を分離し、エラー処理を共通化する |
 
 ## 10. ⚠️ 矛盾・確認事項
