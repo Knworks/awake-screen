@@ -13,6 +13,7 @@ AwakeScreen is a lightweight VS Code Desktop extension that temporarily prevents
 
 - One-click sleep prevention from the VS Code status bar
 - Three commands for toggle, explicit enable, and explicit disable flows
+- Optional automatic activation when VS Code starts
 - OS-specific sleep prevention on Windows, macOS, and Linux without permanently changing power settings
 - Warning state with retry when sleep prevention could not start
 
@@ -21,6 +22,22 @@ AwakeScreen is a lightweight VS Code Desktop extension that temporarily prevents
 - `Keep Awake: Toggle`
 - `Keep Awake: Enable`
 - `Keep Awake: Disable`
+
+## ⚙️ Settings
+
+| Setting | Default | Description |
+| --- | --- | --- |
+| `awake-screen.enableOnStartup` | `false` | Automatically enable Keep Awake when VS Code starts or a window reloads. |
+
+Enable **AwakeScreen: Enable On Startup** in VS Code user settings, or add this to your user `settings.json`:
+
+```json
+{
+  "awake-screen.enableOnStartup": true
+}
+```
+
+Changes apply the next time the extension starts; restart VS Code or reload the window to apply them. This is a user setting shared across windows and cannot be overridden by workspace settings. With the default `false`, Keep Awake remains off at startup. With `true`, you can still disable it manually after startup, and it will be enabled again on the next startup or window reload. Startup failures use the same warning state and error notification as manual activation.
 
 ## Status bar states
 

@@ -12,6 +12,7 @@ export interface AwakeExtensionDependencies {
 	errorNotifier?: ErrorNotifier;
 	logger?: LoggerLike;
 	sleepInhibitor?: SleepInhibitor;
+	enableOnStartup?: boolean;
 }
 
 interface ResolvedAwakeExtensionDependencies {
@@ -21,6 +22,7 @@ interface ResolvedAwakeExtensionDependencies {
 	errorNotifier: ErrorNotifier;
 	logger: LoggerLike;
 	sleepInhibitor?: SleepInhibitor;
+	enableOnStartup: boolean;
 }
 
 export interface AwakeExtensionApi {
@@ -45,6 +47,7 @@ class AwakeExtension implements AwakeExtensionApi {
 	public readonly controller: AwakeController;
 	private readonly statusBarController: StatusBarController;
 	private readonly commandDisposables: vscode.Disposable[] = [];
+	private startupPromise: Promise<void> = Promise.resolve();
 
 	public constructor(dependencies: ResolvedAwakeExtensionDependencies) {
 		this.statusBarController = new StatusBarController(dependencies.createStatusBarItem());
@@ -62,7 +65,15 @@ class AwakeExtension implements AwakeExtensionApi {
 		this.commandDisposables.push(...disposables);
 	}
 
+	public async initialize(enableOnStartup: boolean): Promise<void> {
+		if (enableOnStartup === true) {
+			this.startupPromise = this.controller.enable();
+			await this.startupPromise;
+		}
+	}
+
 	public async deactivate(): Promise<void> {
+		await this.startupPromise;
 		await this.controller.deactivate();
 		this.statusBarController.dispose();
 		this.commandDisposables.forEach((disposable) => disposable.dispose());
@@ -83,13 +94,14 @@ function resolveDependencies(overrides: AwakeExtensionDependencies = {}): Resolv
 		errorNotifier: overrides.errorNotifier ?? new WindowErrorNotifier(),
 		logger: overrides.logger ?? new ConsoleLogger(),
 		sleepInhibitor: overrides.sleepInhibitor,
+		enableOnStartup: overrides.enableOnStartup ?? vscode.workspace.getConfiguration('awake-screen').get<boolean>('enableOnStartup', false),
 	};
 }
 
-export function createAwakeExtension(
+export async function createAwakeExtension(
 	context: vscode.ExtensionContext,
 	overrides: AwakeExtensionDependencies = {},
-): AwakeExtensionApi {
+): Promise<AwakeExtensionApi> {
 	const dependencies = resolveDependencies(overrides);
 	const extension = new AwakeExtension(dependencies);
 	const commandDisposables = [
@@ -100,11 +112,12 @@ export function createAwakeExtension(
 	commandDisposables.forEach((disposable) => context.subscriptions.push(disposable));
 	extension.setCommandDisposables(commandDisposables);
 	context.subscriptions.push({ dispose: () => extension.deactivate() });
+	await extension.initialize(dependencies.enableOnStartup);
 	return extension;
 }
 
-export function activate(context: vscode.ExtensionContext): AwakeExtensionApi {
-	activeExtension = createAwakeExtension(context);
+export async function activate(context: vscode.ExtensionContext): Promise<AwakeExtensionApi> {
+	activeExtension = await createAwakeExtension(context);
 	return activeExtension;
 }
 
